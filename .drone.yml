@@ -23,5 +23,5 @@ steps:
       commands:
         - cd /opt/services/clinte
         - sudo -Hu services git pull origin master
-        - sudo -Hu services make
+        - sudo -Hu services sh -c 'PATH="/opt/services/.cargo/bin:$PATH" make'
         - sudo -Hu root make install
