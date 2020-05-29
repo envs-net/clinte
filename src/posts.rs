@@ -1,20 +1,11 @@
 use std::io;
 
 use crate::db;
-use crate::ed;
 use crate::error;
 use crate::user;
 
-// Executes the sql statement that inserts a new post
-// Broken off for unit testing.
-pub fn exec_new(stmt: &mut rusqlite::Statement, title: &str, body: &str) -> error::Result<()> {
-    stmt.execute_named(&[
-        (":title", &title),
-        (":author", &*user::NAME),
-        (":body", &body),
-    ])?;
-    Ok(())
-}
+#[cfg(not(test))]
+use crate::ed;
 
 // Make sure nobody encodes narsty characters
 // into a message to negatively affect other
@@ -29,15 +20,17 @@ fn str_to_utf8(str: &str) -> String {
 }
 
 // First handler for creating a new post.
-pub fn create(db: &db::Conn) -> error::Result<()> {
-    let mut stmt = db
-        .conn
-        .prepare("INSERT INTO posts (title, author, body) VALUES (:title, :author, :body)")?;
-
+pub fn create() -> error::Result<()> {
     println!();
     println!("Title of the new post: ");
 
+    #[cfg(test)]
+    let title = String::from("TEST_TITLE");
+
+    #[cfg(not(test))]
     let mut title = String::new();
+
+    #[cfg(not(test))]
     io::stdin().read_line(&mut title)?;
 
     let title = str_to_utf8(title.trim());
@@ -49,49 +42,50 @@ pub fn create(db: &db::Conn) -> error::Result<()> {
 
     println!();
 
+    #[cfg(not(test))]
     let body_raw = str_to_utf8(&ed::call(""));
+
+    #[cfg(not(test))]
     let body = if body_raw.len() > 500 {
         &body_raw[..500]
     } else {
         &body_raw
     };
 
-    let trimmed_body = body.trim();
+    #[cfg(test)]
+    let body = String::from("TEST_BODY");
 
-    exec_new(&mut stmt, title, trimmed_body)?;
+    let trimmed_body = body.trim();
+    let user = &*user::NAME;
+
+    let mut all = db::Posts::get_all(db::PATH);
+    let new = db::Post {
+        author: user.into(),
+        title: title.to_string(),
+        body: trimmed_body.to_string(),
+    };
+
+    all.append(new);
+    all.write();
 
     println!();
     Ok(())
 }
 
 // Shows the most recent posts.
-pub fn display(db: &db::Conn) -> error::Result<()> {
-    let mut stmt = db.conn.prepare("SELECT * FROM posts")?;
-    let out = stmt.query_map(rusqlite::NO_PARAMS, |row| {
-        let id: u32 = row.get(0)?;
-        let title: String = row.get(1)?;
-        let author: String = row.get(2)?;
-        let body: String = row.get(3)?;
-        Ok(db::Post {
-            id,
-            title,
-            author,
-            body,
-        })
-    })?;
+pub fn display() -> error::Result<()> {
+    let all = db::Posts::get_all(db::PATH);
 
     let mut postvec = Vec::new();
-    out.for_each(|row| {
-        if let Ok(post) = row {
-            let newpost = format!(
-                "{}. {} -> by {}\n{}\n\n",
-                post.id,
-                post.title.trim(),
-                post.author,
-                post.body.trim()
-            );
-            postvec.push(newpost);
-        }
+    all.posts().iter().enumerate().for_each(|(id, post)| {
+        let newpost = format!(
+            "{}. {} -> by {}\n{}\n\n",
+            id + 1,
+            post.title.trim(),
+            post.author,
+            post.body.trim()
+        );
+        postvec.push(newpost);
     });
 
     for (i, e) in postvec.iter().enumerate() {
@@ -104,8 +98,8 @@ pub fn display(db: &db::Conn) -> error::Result<()> {
 }
 
 // First handler to update posts.
-pub fn update_handler(db: &db::Conn, id: u32) -> error::Result<()> {
-    let id_num_in = if id == 0 {
+pub fn update_handler(id: usize) -> error::Result<()> {
+    let mut id_num_in = if id == 0 {
         println!();
         println!("ID number of your post to edit?");
         let mut id_num_in = String::new();
@@ -115,31 +109,45 @@ pub fn update_handler(db: &db::Conn, id: u32) -> error::Result<()> {
         id
     };
 
-    let mut get_stmt = db.conn.prepare("SELECT * FROM posts WHERE id = :id")?;
+    id_num_in -= 1;
 
-    let row = get_stmt.query_row_named(&[(":id", &id_num_in)], |row| {
-        let title: String = row.get(1)?;
-        let author = row.get(2)?;
-        let body = row.get(3)?;
-        Ok(vec![title, author, body])
-    })?;
+    #[cfg(not(test))]
+    let user = &*user::NAME;
 
-    if *user::NAME != row[1] {
+    let mut all = db::Posts::get_all(db::PATH);
+    let post = all.get(id_num_in);
+
+    #[cfg(test)]
+    let user = &post.author;
+
+    if *user != post.author {
         println!();
-        println!("Username mismatch - can't update_handler post!");
-        return Ok(());
+        println!("Users don't match. Can't update post!");
+        println!();
+        std::process::exit(1);
     }
 
+    #[cfg(test)]
+    let new_title = String::from("TEST_TITLE");
+
+    #[cfg(not(test))]
     let mut new_title = String::new();
 
     println!("Updating post {}", id_num_in);
     println!();
-    println!("Current Title: {}", &row[0]);
+    println!("Current Title: {}", post.title);
     println!();
     println!("Enter new title:");
+
+    #[cfg(not(test))]
     io::stdin().read_line(&mut new_title)?;
 
-    let body_raw = str_to_utf8(&ed::call(&row[2]));
+    #[cfg(test)]
+    let body_raw = String::from("TEST_BODY");
+
+    #[cfg(not(test))]
+    let body_raw = str_to_utf8(&ed::call(&post.body));
+
     let body = if body_raw.len() > 500 {
         &body_raw[..500]
     } else {
@@ -148,38 +156,24 @@ pub fn update_handler(db: &db::Conn, id: u32) -> error::Result<()> {
 
     let trimmed_body = body.trim();
 
-    update(&new_title, &trimmed_body, id_num_in, &db)?;
+    all.replace(
+        id_num_in,
+        db::Post {
+            author: user.into(),
+            title: new_title,
+            body: trimmed_body.to_string(),
+        },
+    );
+
+    all.write();
 
     println!();
     Ok(())
 }
 
-// Allows editing of posts - called by main::update
-pub fn update(new_title: &str, new_body: &str, id_num_in: u32, db: &db::Conn) -> error::Result<()> {
-    let new_title = new_title.trim();
-    let new_body = new_body.trim();
-
-    let title_stmt = format!("UPDATE posts SET title = :title WHERE id = {}", id_num_in);
-    let mut stmt = db.conn.prepare(&title_stmt)?;
-    stmt.execute_named(&[(":title", &new_title)])?;
-    let body_stmt = format!("UPDATE posts SET body = :body WHERE id = {}", id_num_in);
-    let mut stmt = db.conn.prepare(&body_stmt)?;
-
-    stmt.execute_named(&[(":body", &new_body)])?;
-
-    Ok(())
-}
-
-// Helper to just run a sql statement.
-pub fn exec_stmt_no_params(stmt: &mut rusqlite::Statement) -> error::Result<()> {
-    stmt.execute(rusqlite::NO_PARAMS)?;
-
-    Ok(())
-}
-
 // First handler to remove a post
-pub fn delete_handler(db: &db::Conn, id: u32) -> error::Result<()> {
-    let id_num_in: u32 = if id == 0 {
+pub fn delete_handler(id: usize) -> error::Result<()> {
+    let mut id_num_in = if id == 0 {
         println!();
         println!("ID of the post to delete?");
         let mut id_num_in = String::new();
@@ -190,22 +184,21 @@ pub fn delete_handler(db: &db::Conn, id: u32) -> error::Result<()> {
         id
     };
 
-    let del_stmt = format!("DELETE FROM posts WHERE id = {}", id_num_in);
-    let get_stmt = format!("SELECT * FROM posts WHERE id = {}", id_num_in);
+    id_num_in -= 1;
 
-    let mut get_stmt = db.conn.prepare(&get_stmt)?;
-    let mut del_stmt = db.conn.prepare(&del_stmt)?;
+    let mut all = db::Posts::get_all(db::PATH);
+    let post = all.get(id_num_in);
 
-    let user_in_post: String = get_stmt.query_row(rusqlite::NO_PARAMS, |row| row.get(2))?;
-
-    if *user::NAME != user_in_post {
+    if *user::NAME != post.author {
         println!();
-        println!("Users don't match. Can't delete!");
+        println!("Users don't match. Can't delete post!");
         println!();
-        return Ok(());
+        std::process::exit(1);
     }
 
-    exec_stmt_no_params(&mut del_stmt)?;
+    all.delete(id_num_in);
+    all.write();
+
     Ok(())
 }
 
@@ -213,30 +206,43 @@ pub fn delete_handler(db: &db::Conn, id: u32) -> error::Result<()> {
 mod tests {
     use super::*;
 
+    use std::fs;
+
     #[test]
-    fn post_new() {
-        let db = db::Conn::init(":memory:");
-        let db = db::Conn { conn: db };
-        let mut stmt = db
-            .conn
-            .prepare("INSERT INTO posts (title, author, body) VALUES (:title, :author, :body)")
-            .unwrap();
+    fn test_str_to_utf8() {
+        let lhs = "foobar";
+        let rhs = str_to_utf8(lhs);
+        assert_eq!(lhs, rhs);
+    }
 
-        let title = String::from("TEST TITLE");
+    #[test]
+    fn display_doesnt_explode() {
+        assert!(display().is_ok());
+    }
 
-        exec_new(&mut stmt, &title, "TEST BODY").unwrap();
-        update("NEW TITLE", "TEST BODY", 1, &db).unwrap();
+    #[test]
+    fn test_update_handler() {
+        fs::copy(db::PATH, "clinte_bak.json").unwrap();
+        update_handler(1).unwrap();
+        let all = db::Posts::get_all(db::PATH);
+        let post = all.get(0);
+        assert_eq!(post.title, "TEST_TITLE");
+        assert_eq!(post.body, "TEST_BODY");
+        fs::rename("clinte_bak.json", db::PATH).unwrap();
+    }
 
-        let mut stmt = db
-            .conn
-            .prepare("SELECT * FROM posts WHERE title = :title")
-            .unwrap();
+    #[test]
+    fn test_create_delete() {
+        fs::copy(db::PATH, "clinte_bak.json").unwrap();
+        create().unwrap();
+        let all = db::Posts::get_all(db::PATH);
+        let post = all.get(1);
 
-        let title = String::from("NEW TITLE");
-        let out: String = stmt
-            .query_row_named(&[(":title", &title)], |row| row.get::<usize, String>(1))
-            .unwrap();
+        assert_eq!(post.title, "TEST_TITLE");
+        assert_eq!(post.body, "TEST_BODY");
 
-        assert_eq!("NEW TITLE", &out);
+        delete_handler(2).unwrap();
+
+        fs::rename("clinte_bak.json", db::PATH).unwrap();
     }
 }

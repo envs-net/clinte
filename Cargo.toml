@@ -1,6 +1,6 @@
 [package]
 name = "clinte"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Ben Morrison <ben@gbmor.dev>"]
 edition = "2018"
 description = "CLI note posting system for shared UNIX boxes."
@@ -17,9 +17,11 @@ maintenance = { status = "stable" }
 
 [dependencies]
 chrono = "^0.4"
+fd-lock = "^1.1"
 lazy_static = "^1.4"
 log = "^0.4"
-rusqlite = "^0.20"
+serde = { version = "^1.0", features = ["derive"] }
+serde_json = "^1.0"
 simplelog = "^0.7"
 users = "^0.9"
 
