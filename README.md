@@ -1,4 +1,4 @@
-# clinte &nbsp; [![Build Status](https://travis-ci.com/gbmor/clinte.svg?branch=master)](https://travis-ci.com/gbmor/clinte) [![codecov](https://codecov.io/gh/gbmor/clinte/branch/master/graph/badge.svg)](https://codecov.io/gh/gbmor/clinte)
+# clinte &nbsp; [![builds.sr.ht status](https://builds.sr.ht/~gbmor/clinte.svg)](https://builds.sr.ht/~gbmor/clinte?) [![Build Status](https://travis-ci.com/gbmor/clinte.svg?branch=master)](https://travis-ci.com/gbmor/clinte) [![codecov](https://codecov.io/gh/gbmor/clinte/branch/master/graph/badge.svg)](https://codecov.io/gh/gbmor/clinte)
 
 Command-line community notice board for public-access UNIX systems. Post text-only notes for other users to see.
 
@@ -36,22 +36,20 @@ $ make
 $ sudo make install
 ```
 
-`make` will automatically checkout the latest tag and build from there.
-
 ## Upgrading
 
-**Note:** v1.0.0 used sqlite3, which presented some issues. v2.0.0 uses a json structure for posts,
-as this will be safer on a multi-user system. When upgrading from v1.0.0 to v2.0.0, you won't be
+**Note:** v1.0.0 used sqlite3, which presented some issues. v2.x uses a json structure for posts,
+as this will be safer on a multi-user system. When upgrading from v1.0.0 to v2.x, you won't be
 able to save the posts without using a third-party tool to dump the `posts` table to json, and
 manually adjusting it to fit the expected format (which can be seen in the included `clinte.json`).
 
-*If upgrading from v1.0.0 -> v2.0.0, do a fresh install, including removing the database directory 
+*If upgrading from v1.0.0 -> v2.x, do a fresh install, including removing the database directory 
 `/usr/local/clinte`. The following applies to upgrading when already running at least v2.0.0*
 
 ```
 $ make update
 $ make
-$ make upgrade
+$ make install
 ```
 
 This will:
@@ -107,9 +105,22 @@ If the `[id]` argument is absent,  `clinte` asks for the numeric ID of the post 
 $ clinte -v [post|update|delete] [id]
 ```
 Use this flag if something's going wrong. Additional information will be written to
-`/tmp/clinte_$USER.log` that will, hopefully, reveal the cause of the error.
+`/tmp/clinte_$USER.log** that will, hopefully, reveal the cause of the error.
+
+**Line Wrapping**
+
+```
+$ clinte -l 80
+```
+
+Wraps posts at the given line length. Set to <10 to disable line wrapping. Defaults to 80.
 
 ## Notes
 
 The file where the posts are stored, `/usr/local/clinte/clinte.json`, must be writeable by all
 users on the system. Keep this in mind.
+
+The main project is at [sr.ht/~gbmor/clinte](https://sr.ht/~gbmor/clinte), with a mirror at
+[github.com/gbmor/clinte](https://github.com/gbmor/clinte). Please send patches to
+[~gbmor/clinte@lists.sr.ht](mailto:~gbmor/clinte@lists.sr.ht). For more info on this workflow,
+check out [git send-email](https://git-send-email.io)

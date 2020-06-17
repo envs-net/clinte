@@ -1,5 +1,9 @@
 use std::io;
 
+#[cfg(not(test))]
+use std::{env, fs};
+
+use crate::conf;
 use crate::db;
 use crate::error;
 use crate::user;
@@ -74,16 +78,37 @@ pub fn create() -> error::Result<()> {
 
 // Shows the most recent posts.
 pub fn display() -> error::Result<()> {
+    let args = &*conf::ARGS;
+    let line_len = args
+        .value_of("line")
+        .unwrap_or_else(|| "80")
+        .parse::<usize>()
+        .unwrap_or_else(|_| 80);
+
     let all = db::Posts::get_all(db::PATH);
 
     let mut postvec = Vec::new();
     all.posts().iter().enumerate().for_each(|(id, post)| {
+        let body = post
+            .body
+            .trim()
+            .chars()
+            .enumerate()
+            .map(|(i, e)| {
+                let i = i + 1;
+                if line_len > 9 && i % line_len == 0 {
+                    return format!("{}\n", e);
+                }
+                e.to_string()
+            })
+            .collect::<String>();
+
         let newpost = format!(
             "{}. {} -> by {}\n{}\n\n",
             id + 1,
             post.title.trim(),
             post.author,
-            post.body.trim()
+            body
         );
         postvec.push(newpost);
     });
@@ -92,6 +117,19 @@ pub fn display() -> error::Result<()> {
         if (postvec.len() > 14 && i >= postvec.len() - 15) || postvec.len() < 15 {
             print!("{}", e);
         }
+    }
+
+    // copy the json file to the user's home directory
+    // so it can be compared to the global file to check
+    // for new posts.
+    // previously, I'd hashed it, but I feel like it's
+    // better to leave the hashing to UNIX utilities
+    // than to add a heavy-ish dependency.
+    #[cfg(not(test))]
+    {
+        let homedir = env::var("HOME")?;
+        let localdest = format!("{}/.clinte.json", homedir);
+        fs::copy(db::PATH, localdest)?;
     }
 
     Ok(())
